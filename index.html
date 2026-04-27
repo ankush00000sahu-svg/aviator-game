@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Aviator - Crash Game</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.3/socket.io.min.js"></script>
+  <style>
+    /* ==================== RESET & BASE ==================== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      background: #0D0D2B;
+      color: #FFF;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+    button, input { font-family: inherit; }
+
+    /* ==================== AUTH SCREEN ==================== */
+    #authScreen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    #authScreen h1 { font-size: 48px; color: #FFD700; margin-bottom: 5px; }
+    #authScreen .sub { color: #CCC; font-size: 18px; margin-bottom: 30px; }
+    #authScreen input {
+      width: 100%;
+      max-width: 400px;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 12px;
+      border: 1px solid #333;
+      background: #1A1A3E;
+      color: #FFF;
+      font-size: 16px;
+      outline: none;
+    }
+    #authScreen input:focus { border-color: #FFD700; }
+    #authScreen input::placeholder { color: #888; }
+    .authBtn {
+      width: 100%;
+      max-width: 400px;
+      padding: 18px;
+      border: none;
+      border-radius: 12px;
+      background: #FFD700;
+      color: #000;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 5px;
+      transition: transform 0.1s;
+    }
+    .authBtn:active { transform: scale(0.97); }
+    .switchLink { color: #4FC3F7; margin-top: 20px; cursor: pointer; font-size: 14px; }
+    .switchLink:hover { text-decoration: underline; }
+    .bonusBox {
+      width: 100%;
+      max-width: 400px;
+      background: #1A3A1A;
+      border: 1px solid #2E7D32;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+    .bonusBox p { color: #81C784; font-size: 13px; margin-bottom: 3px; }
+    .bonusBox .note { color: #FFB74D; font-size: 11px; font-style: italic; margin-top: 5px; }
+
+    /* ==================== GAME SCREEN ==================== */
+    #gameScreen { display: none; }
+
+    /* Header */
+    .header {
+      padding: 12px 15px;
+      background: linear-gradient(180deg, #0D0D2B 0%, #1A1A3E 100%);
+      border-bottom: 1px solid #2A2A5E;
+    }
+    .headerTop { display: flex; justify-content: space-between; align-items: center; }
+    .balSection { }
+    .balLabel { color: #888; font-size: 11px; }
+    .balAmt { font-size: 22px; font-weight: bold; color: #FFF; }
+    .bonusBadge {
+      background: #2E7D32;
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: bold;
+      color: #FFF;
+    }
+    .headerBtns { display: flex; gap: 8px; }
+    .hBtn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      color: #FFF;
+      transition: opacity 0.2s;
+    }
+    .hBtn:active { opacity: 0.7; }
+    .hBtn.dep { background: #4CAF50; }
+    .hBtn.wd { background: #FF6B35; }
+    .refStrip {
+      background: #1A237E;
+      border: 1px solid #3F51B5;
+      border-radius: 8px;
+      padding: 8px;
+      margin-top: 8px;
+      text-align: center;
+      cursor: pointer;
+      color: #FFD700;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    /* History */
+    .historyRow {
+      padding: 8px 15px;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .historyRow::-webkit-scrollbar { display: none; }
+    .historyPill {
+      display: inline-block;
+      padding: 5px 14px;
+      border-radius: 15px;
+      font-size: 11px;
+      font-weight: bold;
+      color: #FFF;
+      flex-shrink: 0;
+    }
+
+    /* Game Area */
+    .gameArea {
+      margin: 8px 12px;
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      height: calc(100vh - 420px);
+      min-height: 250px;
+      background: linear-gradient(180deg, #0a0a3e 0%, #1a1a6e 40%, #2a1a3e 100%);
+      border: 1px solid #2A2A5E;
+    }
+    .canvasWrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    #gameCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .multOverlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 5;
+      pointer-events: none;
+    }
+    #multDisplay {
+      font-size: 54px;
+      font-weight: bold;
+      text-shadow: 0 0 20px rgba(0,0,0,0.5);
+      transition: color 0.3s;
+    }
+    #profitDisplay {
+      font-size: 22px;
+      font-weight: bold;
+      margin-top: 5px;
+      display: none;
+    }
+    #cashoutDisplay {
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 5px;
+      display: none;
+      color: #4FC3F7;
+    }
+    .statusOverlay {
+      position: absolute;
+      top: 10px;
+      left: 15px;
+      z-index: 5;
+      pointer-events: none;
+    }
+    .statusOverlay p {
+      font-size: 12px;
+      color: #AAA;
+    }
+    .statusOverlay .roundNum {
+      font-size: 11px;
+      color: #888;
+    }
+
+    /* Grid Lines on canvas - done in JS */
+
+    /* Bet Section */
+    .betSection {
+      padding: 10px 15px;
+      position: sticky;
+      bottom: 0;
+      background: #0D0D2B;
+      border-top: 1px solid #2A2A5E;
+    }
+    .quickBets {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .qBtn {
+      padding: 10px 18px;
+      border: 1px solid #4A4A8E;
+      border-radius: 10px;
+      background: #2A2A5E;
+      color: #FFF;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .qBtn:active { background: #4A4A8E; transform: scale(0.95); }
+    .qBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .cashoutBtn {
+      width: 100%;
+      padding: 18px;
+      border: none;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .cashoutBtn.active { background: #00C853; color: #FFF; }
+    .cashoutBtn.active:active { transform: scale(0.97); }
+    .cashoutBtn.disabled { background: #333; color: #666; cursor: not-allowed; }
+    .cashoutBtn.locked { background: #D50000; color: #FFF; }
+
+    /* Player List */
+    .playerSection { padding: 0 15px; }
+    .playerToggle {
+      padding: 10px;
+      background: #1A1A3E;
+      border-radius: 10px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 14px;
+      color: #FFF;
+      margin-bottom: 5px;
+    }
+    .playerToggle:active { opacity: 0.7; }
+    .playerList {
+      background: #1A1A3E;
+      border-radius: 10px;
+      padding: 10px;
+      max-height: 130px;
+      overflow-y: auto;
+      display: none;
+    }
+    .playerList.open { display: block; }
+    .playerList::-webkit-scrollbar { width: 4px; }
+    .playerList::-webkit-scrollbar-thumb { background: #4A4A8E; border-radius: 4px; }
+    .playerRow {
+      display: flex;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid #2A2A5E;
+      font-size: 13px;
+    }
+    .playerRow:last-child { border: none; }
+    .pRank { color: #888; width: 30px; }
+    .pUid { color: #FFF; flex: 1; font-family: monospace; }
+    .pBet { color: #FFD700; width: 70px; text-align: right; }
+    .pStatus { width: 80px; text-align: right; font-size: 11px; }
+    .pStatus.win { color: #00C853; }
+    .pStatus.loss { color: #FF5252; }
+
+    /* ==================== MODALS ==================== */
+    .modalOverlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .modalOverlay.open { display: flex; }
+    .modalBox {
+      background: #1A1A3E;
+      border: 1px solid #3F51B5;
+      border-radius: 20px;
+      padding: 25px;
+      width: 100%;
+      max-width: 380px;
+    }
+    .modalBox h2 { color: #FFF; font-size: 22px; margin-bottom: 15px; text-align: center; }
+    .modalBox p { color: #AAA; font-size: 13px; margin-bottom: 8px; text-align: center; }
+    .modalBox .upiBox {
+      background: #0D47A1;
+      color: #4FC3F7;
+      font-size: 16px;
+      font-weight: bold;
+      text-align: center;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    .modalBox .bonusNote {
+      background: #1B5E20;
+      color: #81C784;
+      font-size: 14px;
+      font-weight: bold;
+      text-align: center;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    .modalBox .warningNote {
+      background: #5D0000;
+      color: #FF8A80;
+      font-size: 12px;
+      text-align: center;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    .modalBox input {
+      width: 100%;
+      padding: 15px;
+      margin-bottom: 12px;
+      border-radius: 12px;
+      border: 1px solid #333;
+      background: #0D0D2B;
+      color: #FFF;
+      font-size: 16px;
+      outline: none;
+    }
+    .modalBox input:focus { border-color: #FFD700; }
+    .modalBtns { display: flex; gap: 10px; margin-top: 5px; }
+    .modalBtns button {
+      flex: 1;
+      padding: 15px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .modalBtns button:active { opacity: 0.7; }
+    .modalBtns .btnPrimary { background: #FFD700; color: #000; }
+    .modalBtns .btnDanger { background: #D50000; color: #FFF; }
+    .modalBtns .btnInfo { background: #1565C0; color: #FFF; }
+
+    /* Referral Modal Special */
+    .refCodeBig {
+      background: #0D0D2B;
+      border: 2px dashed #FFD700;
+      padding: 15px;
+      border-radius: 12px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+      color: #FFD700;
+      margin: 15px 0;
+      letter-spacing: 2px;
+    }
+    .refInfo {
+      color: #CCC;
+      font-size: 14px;
+      margin-bottom: 15px;
+      line-height: 1.6;
+    }
+    .refInfo span { color: #81C784; font-weight: bold; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1B5E20;
+      color: #FFF;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: bold;
+      z-index: 2000;
+      display: none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      max-width: 90%;
+      text-align: center;
+    }
+    .toast.error { background: #B71C1C; }
+    .toast.show { display: block; animation: fadeInOut 3s ease; }
+
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+      10% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      80% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+    }
+
+    /* Responsive */
+    @media (max-width: 400px) {
+      #multDisplay { font-size: 40px; }
+      .gameArea { height: calc(100vh - 380px); min-height: 200px; }
+      .qBtn { padding: 8px 12px; font-size: 12px; }
+      .cashoutBtn { padding: 14px; font-size: 16px; }
+    }
+    @media (min-width: 768px) {
+      .gameArea { height: 450px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== TOAST ==================== -->
+  <div id="toast" class="toast"></div>
+
+  <!-- ==================== AUTH SCREEN ==================== -->
+  <div id="authScreen">
+    <h1>🛩️ Aviator</h1>
+    <p class="sub" id="authTitle">Login Karein</p>
+
+    <input type="tel" id="phoneInput" placeholder="Mobile Number (10 digits)" maxlength="10" autocomplete="tel">
+    <input type="password" id="passInput" placeholder="Password" autocomplete="current-password">
+    
+    <div id="referralSection" style="display:none; width:100%; max-width:400px;">
+      <input type="text" id="refInput" placeholder="Referral Code (optional)" autocomplete="off">
+      <div class="bonusBox">
+        <p>🎁 Welcome Bonus: ₹10-₹200</p>
+        <p>🔗 Referral Bonus: ₹100-₹200</p>
+        <p>💰 Deposit Bonus: 10% extra</p>
+        <p class="note">⚠️ Bonus sirf khelne ke liye, withdraw nahi ho sakta</p>
+      </div>
+    </div>
+
+    <button class="authBtn" id="authBtn">Login</button>
+    <p class="switchLink" id="switchAuth">Naya account? Register karein</p>
+  </div>
+
+  <!-- ==================== GAME SCREEN ==================== -->
+  <div id="gameScreen">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="headerTop">
+        <div class="balSection">
+          <div class="balLabel">💰 Balance</div>
+          <div class="balAmt" id="balanceDisplay">₹0.00</div>
+        </div>
+        <div class="bonusBadge">🎁 <span id="bonusDisplay">₹0</span></div>
+        <div class="headerBtns">
+          <button class="hBtn dep" onclick="openModal('deposit')">Deposit</button>
+          <button class="hBtn wd" onclick="openModal('withdraw')">Withdraw</button>
+        </div>
+      </div>
+      <div class="refStrip" onclick="openModal('referral')">🔗 Refer & Earn — <span id="refCodeDisplay">REFXXXX</span></div>
+    </div>
+
+    <!-- History -->
+    <div class="historyRow" id="historyRow"></div>
+
+    <!-- Game Area -->
+    <div class="gameArea">
+      <div class="canvasWrapper" id="canvasWrapper">
+        <canvas id="gameCanvas"></canvas>
+        <div class="multOverlay">
+          <div id="multDisplay">0.00x</div>
+          <div id="profitDisplay">💰 +₹<span id="profitAmt">0</span></div>
+          <div id="cashoutDisplay">✅ Cashed at <span id="cashoutMult">0</span>x → ₹<span id="cashoutWin">0</span></div>
+        </div>
+        <div class="statusOverlay">
+          <p id="statusText">⏳ Waiting...</p>
+          <p class="roundNum" id="roundText">Round #0</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Player Section -->
+    <div class="playerSection">
+      <div class="playerToggle" id="playerToggle" onclick="togglePlayers()">👥 Players (0) ▼</div>
+      <div class="playerList" id="playerList"></div>
+    </div>
+
+    <!-- Bet Section -->
+    <div class="betSection">
+      <div class="quickBets" id="quickBets">
+        <button class="qBtn" onclick="placeBet(5)">₹5</button>
+        <button class="qBtn" onclick="placeBet(10)">₹10</button>
+        <button class="qBtn" onclick="placeBet(50)">₹50</button>
+        <button class="qBtn" onclick="placeBet(100)">₹100</button>
+        <button class="qBtn" onclick="placeBet(500)">₹500</button>
+        <button class="qBtn" onclick="placeBet(1000)">₹1000</button>
+        <button class="qBtn" onclick="placeBet(5000)">₹5000</button>
+      </div>
+      <button class="cashoutBtn disabled" id="cashoutBtn" onclick="handleCashout()">💰 Place Bet</button>
+    </div>
+  </div>
+
+  <!-- ==================== DEPOSIT MODAL ==================== -->
+  <div class="modalOverlay" id="depositModal">
+    <div class="modalBox">
+      <h2>💰 Deposit</h2>
+      <p>PhonePe / Paytm / GPay se UPI karein</p>
+      <div class="upiBox">UPI ID: aviator@upi</div>
+      <input type="number" id="depositAmount" placeholder="Amount ₹" min="5">
+      <div class="bonusNote">🎁 10% extra bonus milega!</div>
+      <div class="modalBtns">
+        <button class="btnPrimary" onclick="handleDeposit()">Deposit</button>
+        <button class="btnDanger" onclick="closeModal('deposit')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== WITHDRAW MODAL ==================== -->
+  <div class="modalOverlay" id="withdrawModal">
+    <div class="modalBox">
+      <h2>🏧 Withdraw</h2>
+      <div id="withdrawWarning" class="warningNote" style="display:none;">⚠️ ₹100 deposit karke khelne ke baad hi withdrawal hoga</div>
+      <input type="number" id="withdrawAmount" placeholder="Amount ₹ (Min 50 - Max 50,000)" min="50">
+      <input type="text" id="withdrawUpi" placeholder="UPI ID">
+      <div class="modalBtns">
+        <button class="btnPrimary" onclick="handleWithdraw()">Withdraw</button>
+        <button class="btnDanger" onclick="closeModal('withdraw')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== REFERRAL MODAL ==================== -->
+  <div class="modalOverlay" id="referralModal">
+    <div class="modalBox">
+      <h2>🔗 Referral Program</h2>
+      <div class="refCodeBig" id="referralCodeDisplay">REFXXXX</div>
+      <div class="refInfo">
+        🎁 Har referral par <span>₹100-₹200</span> bonus<br>
+        👤 Friend ko <span>₹10</span> bonus<br>
+        💰 Bonus sirf khelne ke liye<br>
+        👥 Total Referrals: <span id="refCountDisplay">0</span>
+      </div>
+      <div class="modalBtns">
+        <button class="btnInfo" onclick="copyReferral()">📋 Copy Code</button>
+        <button class="btnDanger" onclick="closeModal('referral')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== JAVASCRIPT ==================== -->
+  <script>
+    // ==================== CONFIG ====================
+    const SERVER_URL = 'http://192.168.1.5:3001'; // 🛑 APNA SERVER IP DAALEIN
+    let socket = null;
+    let token = null;
+    let isLoggedIn = false;
+
+    // Game State
+    let isRoundActive = false;
+    let isLocked = false;
+    let currentMultiplier = 0;
+    let crashPoint = 1;
+    let roundNumber = 0;
+    let balance = 0;
+    let bonusBalance = 0;
+    let userBetted = false;
+    let myBetAmount = 0;
+    let winAmount = 0;
+    let cashoutAt = 0;
+    let players = [];
+    let roundHistory = [];
+    
+    // Canvas
+    let canvas, ctx;
+    let canvasAnimId = null;
+    let canvasWidth, canvasHeight;
+    
+    // Referral
+    let refCode = '';
+    let refCount = 0;
+    let firstDepositDone = false;
+    let totalDeposited = 0;
+
+    // DOM refs
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+
+    // ==================== UTILITY ====================
+    function showToast(msg, isError = false) {
+      if (toastTimer) clearTimeout(toastTimer);
+      toastEl.textContent = msg;
+      toastEl.className = 'toast' + (isError ? ' error' : '');
+      toastEl.classList.add('show');
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3000);
+    }
+
+    function formatNum(n) { return n.toFixed(2); }
+
+    // ==================== CANVAS ====================
+    function initCanvas() {
+      canvas = document.getElementById('gameCanvas');
+      ctx = canvas.getContext('2d');
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+      drawCanvas();
+    }
+
+    function resizeCanvas() {
+      const wrapper = document.getElementById('canvasWrapper');
+      canvas.width = wrapper.clientWidth * (window.devicePixelRatio || 1);
+      canvas.height = wrapper.clientHeight * (window.devicePixelRatio || 1);
+      canvas.style.width = wrapper.clientWidth + 'px';
+      canvas.style.height = wrapper.clientHeight + 'px';
+      canvasWidth = wrapper.clientWidth;
+      canvasHeight = wrapper.clientHeight;
+    }
+
+    function drawCanvas() {
+      if (!canvas || !ctx) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      const scale = window.devicePixelRatio || 1;
+      
+      ctx.clearRect(0, 0, w, h);
+      
+      // Background gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, '#0a0a3e');
+      grad.addColorStop(0.4, '#1a1a6e');
+      grad.addColorStop(0.7, '#2a1a5e');
+      grad.addColorStop(1, '#1a0a2e');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Grid lines
+      const displayCrash = isRoundActive ? crashPoint : (crashPoint || 100);
+      const gridPoints = [1, 2, 5, 10, 50, 100].filter(g => g < displayCrash * 1.2);
+      
+      gridPoints.forEach(line => {
+        const y = h - (line / displayCrash) * h * 0.8 - h * 0.05;
+        if (y < 10 || y > h - 10) return;
+        
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.font = `${10 * scale}px sans-serif`;
+        ctx.fillText(line + 'x', 10 * scale, y - 5 * scale);
+      });
+
+      // Draw plane
+      if (currentMultiplier > 0) {
+        const progress = Math.min(currentMultiplier / (displayCrash || 1), 1);
+        const planeX = 0.1 * w + progress * 0.5 * w;
+        const planeY = 0.75 * h - progress * 0.55 * h;
+        
+        // Trail smoke
+        for (let i = 0; i < 8; i++) {
+          const t = i / 8;
+          const tx = planeX - t * 35 * scale - (1 - t) * 10 * scale;
+          const ty = planeY + t * 15 * scale - (1 - t) * 5 * scale;
+          const radius = (3 + t * 5) * scale;
+          const alpha = 0.15 * (1 - t);
+          
+          ctx.beginPath();
+          ctx.arc(tx, ty, radius, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+          ctx.fill();
+        }
+        
+        // Plane body
+        const size = 28 * scale;
+        ctx.save();
+        ctx.translate(planeX, planeY);
+        const angle = Math.atan2(-0.55 * h / 0.5 / w, 1);
+        ctx.rotate(angle);
+        
+        // Fuselage
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, size, size * 0.35, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Wings
+        ctx.fillStyle = '#E0E0E0';
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.2, -size * 0.1);
+        ctx.lineTo(-size * 0.3, -size * 0.7);
+        ctx.lineTo(-size * 0.1, -size * 0.6);
+        ctx.lineTo(0, -size * 0.1);
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.2, size * 0.1);
+        ctx.lineTo(-size * 0.3, size * 0.7);
+        ctx.lineTo(-size * 0.1, size * 0.6);
+        ctx.lineTo(0, size * 0.1);
+        ctx.fill();
+        
+        // Window
+        ctx.fillStyle = '#4FC3F7';
+        ctx.beginPath();
+        ctx.arc(size * 0.2, 0, size * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Cockpit glow
+        ctx.fillStyle = 'rgba(255, 200, 50, 0.6)';
+        ctx.beginPath();
+        ctx.arc(size * 0.35, 0, size * 0.08, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+      }
+
+      canvasAnimId = requestAnimationFrame(() => {
+        if (isRoundActive || currentMultiplier > 0) drawCanvas();
+      });
+    }
+
+    function startCanvasLoop() {
+      if (canvasAnimId) cancelAnimationFrame(canvasAnimId);
+      drawCanvas();
+    }
+
+    // ==================== MULTIPLIER COLOR ====================
+    function getMultColor(m) {
+      if (m < 1) return '#666';
+      if (m < 2) return '#FFD700';
+      if (m < 5) return '#00FF88';
+      if (m < 10) return '#00BFFF';
+      if (m < 50) return '#FF00FF';
+      return '#FF4500';
+    }
+
+    // ==================== AUTH ====================
+    const phoneInput = document.getElementById('phoneInput');
+    const passInput = document.getElementById('passInput');
+    const refInput = document.getElementById('refInput');
+    const authBtn = document.getElementById('authBtn');
+    const switchAuth = document.getElementById('switchAuth');
+    const authTitle = document.getElementById('authTitle');
+    const referralSection = document.getElementById('referralSection');
+    let isRegister = false;
+
+    switchAuth.addEventListener('click', () => {
+      isRegister = !isRegister;
+      authTitle.textContent = isRegister ? 'Register Karein' : 'Login Karein';
+      authBtn.textContent = isRegister ? 'Register' : 'Login';
+      switchAuth.textContent = isRegister ? 'Already have account? Login' : 'Naya account? Register karein';
+      referralSection.style.display = isRegister ? 'block' : 'none';
+    });
+
+    authBtn.addEventListener('click', async () => {
+      const phone = phoneInput.value.trim();
+      const password = passInput.value.trim();
+      const referral = refInput.value.trim();
+
+      if (!phone || phone.length !== 10) return showToast('10-digit phone number daalein', true);
+      if (!password || password.length < 4) return showToast('Password kam se kam 4 characters ka ho', true);
+
+      try {
+        const endpoint = isRegister ? '/register' : '/login';
+        const body = isRegister ? { phone, password, referralCode: referral || undefined } : { phone, password };
+        
+        const res = await fetch(`${SERVER_URL}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        if (data.error) return showToast(data.error, true);
+
+        token = data.token;
+        localStorage.setItem('avToken', token);
+        
+        balance = data.user.balance;
+        bonusBalance = data.user.bonusBalance || 0;
+        refCode = data.user.referralCode || '';
+        refCount = data.user.referralCount || 0;
+        firstDepositDone = data.user.firstDepositDone || false;
+        totalDeposited = data.user.totalDeposited || 0;
+
+        if (data.user.welcomeBonus) {
+          setTimeout(() => showToast(`🎉 Welcome Bonus! ₹${data.user.welcomeBonus} mila!`), 500);
+        }
+        if (data.user.loginBonus) {
+          setTimeout(() => showToast(`📅 Daily Bonus! ₹${data.user.loginBonus} mila!`), 700);
+        }
+
+        document.getElementById('authScreen').style.display = 'none';
+        document.getElementById('gameScreen').style.display = 'block';
+        isLoggedIn = true;
+        updateUI();
+        connectSocket();
+        initCanvas();
+
+      } catch(e) {
+        showToast('Server se connect nahi ho paaya', true);
+      }
+    });
+
+    // Auto-login check
+    const savedToken = localStorage.getItem('avToken');
+    if (savedToken) {
+      (async () => {
+        try {
+          const res = await fetch(`${SERVER_URL}/balance`, { headers: { Authorization: `Bearer ${savedToken}` } });
+          const data = await res.json();
+          if (data.balance !== undefined) {
+            token = savedToken;
+            balance = data.balance;
+            bonusBalance = data.bonusBalance || 0;
+            refCode = data.referralCode || '';
+            refCount = data.referralCount || 0;
+            firstDepositDone = data.firstDepositDone || false;
+            totalDeposited = data.totalDeposited || 0;
+            
+            document.getElementById('authScreen').style.display = 'none';
+            document.getElementById('gameScreen').style.display = 'block';
+            isLoggedIn = true;
+            updateUI();
+            connectSocket();
+            initCanvas();
+          }
+        } catch(e) {}
+      })();
+    }
+
+    // ==================== SOCKET ====================
+    function connectSocket() {
+      if (socket) socket.disconnect();
+      socket = io(SERVER_URL, { transports: ['websocket', 'polling'] });
+
+      socket.on('connect', () => {
+        socket.emit('joinGame', { token });
+      });
+
+      socket.on('gameState', (data) => {
+        isRoundActive = data.isRoundActive;
+        currentMultiplier = data.currentMultiplier || 0;
+        crashPoint = data.crashPoint || 0;
+        roundNumber = data.roundNumber || 0;
+        roundHistory = data.roundHistory || [];
+        balance = data.balance;
+        bonusBalance = data.bonusBalance || 0;
+        refCode = data.referralCode || '';
+        refCount = data.referralCount || 0;
+        firstDepositDone = data.firstDepositDone || false;
+        totalDeposited = data.totalDeposited || 0;
+        updateUI();
+        if (isRoundActive) startCanvasLoop();
+      });
+
+      socket.on('roundStart', (data) => {
+        isRoundActive = true;
+        isLocked = false;
+        crashPoint = data.crashPoint;
+        roundNumber = data.roundNumber;
+        currentMultiplier = 0;
+        userBetted = false;
+        myBetAmount = 0;
+        winAmount = 0;
+        cashoutAt = 0;
+        updateUI();
+        startCanvasLoop();
+      });
+
+      socket.on('multiplierUpdate', (data) => {
+        currentMultiplier = data.multiplier;
+        isLocked = data.isLocked;
+        updateUI();
+      });
+
+      socket.on('lockPeriod', () => {
+        isLocked = true;
+        updateUI();
+      });
+
+      socket.on('roundEnd', (data) => {
+        isRoundActive = false;
+        isLocked = false;
+        currentMultiplier = data.crashPoint;
+        roundHistory = data.roundHistory || [];
+        updateUI();
+        setTimeout(() => startCanvasLoop(), 50);
+      });
+
+      socket.on('allPlayers', (data) => {
+        players = data.players || [];
+        updatePlayerList();
+      });
+
+      socket.on('betPlaced', (data) => {
+        balance = data.balance;
+        bonusBalance = data.bonusBalance;
+        userBetted = true;
+        myBetAmount = data.amount;
+        updateUI();
+        showToast(`✅ Bet placed: ₹${data.amount}`);
+      });
+
+      socket.on('cashoutSuccess', (data) => {
+        cashoutAt = data.multiplier;
+        winAmount = data.winAmount;
+        balance = data.balance;
+        bonusBalance = data.bonusBalance;
+        userBetted = false;
+        updateUI();
+        showToast(`✅ Cashout! ₹${data.winAmount} at ${data.multiplier}x`);
+      });
+
+      socket.on('error', (data) => {
+        showToast(data.message, true);
+      });
+    }
+
+    // ==================== UI UPDATE ====================
+    function updateUI() {
+      document.getElementById('balanceDisplay').textContent = `₹${formatNum(balance)}`;
+      document.getElementById('bonusDisplay').textContent = `₹${bonusBalance.toFixed(0)}`;
+      document.getElementById('refCodeDisplay').textContent = refCode;
+      document.getElementById('referralCodeDisplay').textContent = refCode;
+      document.getElementById('refCountDisplay').textContent = refCount;
+      document.getElementById('roundText').textContent = `Round #${roundNumber}`;
+
+      // Multiplier
+      const multEl = document.getElementById('multDisplay');
+      const displayMult = isRoundActive ? currentMultiplier : crashPoint;
+      multEl.textContent = formatNum(displayMult) + 'x';
+      multEl.style.color = getMultColor(displayMult);
+
+      // Profit display
+      const profitEl = document.getElementById('profitDisplay');
+      const profitAmt = document.getElementById('profitAmt');
+      if (userBetted && isRoundActive) {
+        profitEl.style.display = 'block';
+        profitAmt.textContent = formatNum(myBetAmount * currentMultiplier);
+      } else {
+        profitEl.style.display = 'none';
+      }
+
+      // Cashout display
+      const cashoutEl = document.getElementById('cashoutDisplay');
+      const cashoutMultEl = document.getElementById('cashoutMult');
+      const cashoutWinEl = document.getElementById('cashoutWin');
+      if (cashoutAt > 0) {
+        cashoutEl.style.display = 'block';
+        cashoutMultEl.textContent = formatNum(cashoutAt);
+        cashoutWinEl.textContent = formatNum(winAmount);
+      } else {
+        cashoutEl.style.display = 'none';
+      }
+
+      // Status
+      const statusEl = document.getElementById('statusText');
+      if (isRoundActive) {
+        statusEl.textContent = isLocked ? '🔒 Locked' : `✈️ ${displayMult.toFixed(2)}x`;
+      } else {
+        statusEl.textContent = `⏳ Next round... (Crashed at ${displayMult.toFixed(2)}x)`;
+      }
+
+      // Cashout button
+      const cashoutBtn = document.getElementById('cashoutBtn');
+      if (!isRoundActive) {
+        cashoutBtn.className = 'cashoutBtn disabled';
+        cashoutBtn.textContent = '⏳ Round not active';
+        cashoutBtn.disabled = true;
+      } else if (isLocked) {
+        cashoutBtn.className = 'cashoutBtn locked';
+        const profit = userBetted ? (myBetAmount * currentMultiplier).toFixed(0) : '';
+        cashoutBtn.textContent = `🔒 Locked${profit ? ' (₹' + profit + ')' : ''}`;
+        cashoutBtn.disabled = true;
+      } else if (userBetted) {
+        cashoutBtn.className = 'cashoutBtn active';
+        cashoutBtn.textContent = `💰 Cashout (₹${(myBetAmount * currentMultiplier).toFixed(0)})`;
+        cashoutBtn.disabled = false;
+      } else {
+        cashoutBtn.className = 'cashoutBtn disabled';
+        cashoutBtn.textContent = '💰 Place Bet';
+        cashoutBtn.disabled = false;
+      }
+
+      // Quick bet buttons
+      document.querySelectorAll('.qBtn').forEach(btn => {
+        btn.disabled = userBetted || !isRoundActive;
+      });
+
+      // History
+      updateHistory();
+    }
+
+    function updateHistory() {
+      const container = document.getElementById('historyRow');
+      container.innerHTML = roundHistory.slice(0, 15).map(r => {
+        let bg;
+        if (r.crashPoint >= 2) bg = '#00C853';
+        else if (r.crashPoint >= 1) bg = '#FFD600';
+        else bg = '#D50000';
+        return `<span class="historyPill" style="background:${bg}">${r.crashPoint.toFixed(2)}x</span>`;
+      }).join('');
+    }
+
+    function updatePlayerList() {
+      const container = document.getElementById('playerList');
+      const toggle = document.getElementById('playerToggle');
+      const activeCount = players.filter(p => !p.isCashedOut).length;
+      toggle.innerHTML = `👥 Players (${activeCount}) ${container.classList.contains('open') ? '▲' : '▼'}`;
+      
+      container.innerHTML = players.map((p, i) => {
+        let statusHtml = '';
+        if (p.isCashedOut && p.cashedOutAt > 0) statusHtml = `<span class="pStatus win">✅ ${p.cashedOutAt.toFixed(2)}x</span>`;
+        else if (p.isCashedOut && p.cashedOutAt === 0) statusHtml = `<span class="pStatus loss">💥 Crashed</span>`;
+        else statusHtml = `<span class="pStatus" style="color:#4FC3F7">✈️ Flying</span>`;
+        
+        return `<div class="playerRow">
+          <span class="pRank">#${i + 1}</span>
+          <span class="pUid">${p.uid}</span>
+          <span class="pBet">₹${p.betAmount}</span
